@@ -15,6 +15,7 @@ h2,h4 { color:gold; text-align:center; }
 .table-responsive { overflow-x:auto; }
 .btn-sm { margin-right:5px; margin-bottom:3px; }
 .disabled-row { opacity:0.5; text-decoration: line-through; }
+.spinner-border-sm { width:1rem; height:1rem; border-width:.15em; }
 </style>
 </head>
 <body>
@@ -31,6 +32,7 @@ h2,h4 { color:gold; text-align:center; }
   </div>
 </div>
 
+<!-- Master Panel -->
 <div id="masterPanel" style="display:none;">
   <div class="card p-3 table-responsive">
     <h4>All Stores & Products</h4>
@@ -52,7 +54,7 @@ h2,h4 { color:gold; text-align:center; }
 <script>
 const supabase = supabase.createClient(
   'https://mcxlapbqbnguyedtsjmf.supabase.co',
-  'PUBLIC_ANON_KEY_HERE'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jeGxhcGJxYm5ndXllZHRzam1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNzI3MzAsImV4cCI6MjA4Mzk0ODczMH0.p82ogUSUiCWJye6fjZu9M0uBrCLO_Dpl0FpAqO7RQuU'
 );
 
 let user = null;
@@ -62,30 +64,55 @@ function getLicenseStatus(store){
   const now = new Date();
   const end = new Date(store.license_end);
   const graceEnd = new Date(end); graceEnd.setDate(graceEnd.getDate()+7);
-  if(now<=end) return 'Active';
-  if(now<=graceEnd) return 'Grace';
+  if(now <= end) return 'Active';
+  if(now <= graceEnd) return 'Grace';
   return 'Expired';
 }
 
+// ===================
+// Login
+// ===================
 async function login(btn){
+  const originalText = btn.innerHTML;
   btn.disabled=true;
+  btn.innerHTML=`<span class="spinner-border spinner-border-sm" role="status"></span> Logging in...`;
+
   const password = document.getElementById('password').value.trim();
-  if(!password){ alert('Enter password'); btn.disabled=false; return; }
+  if(!password){ alert('Enter password'); btn.disabled=false; btn.innerHTML=originalText; return; }
 
   const { data, error } = await supabase.auth.signInWithPassword({ email: document.getElementById('email').value, password });
-  if(error){ alert(error.message); btn.disabled=false; return; }
+  if(error){ alert(error.message); btn.disabled=false; btn.innerHTML=originalText; return; }
 
   user = data.user;
-  if(user.email!=='cabangilemakertingconsultant@gmail.com'){ alert('Not authorized'); await supabase.auth.signOut(); btn.disabled=false; return; }
+  if(user.email!=='cabangilemakertingconsultant@gmail.com'){
+    alert('Not authorized'); 
+    await supabase.auth.signOut(); 
+    btn.disabled=false; 
+    btn.innerHTML=originalText; 
+    return; 
+  }
 
   document.getElementById('authForm').style.display='none';
   document.getElementById('masterPanel').style.display='block';
-  loadAllMarketplace();
   btn.disabled=false;
+  btn.innerHTML=originalText;
+  loadAllMarketplace();
 }
 
-async function logout(){ await supabase.auth.signOut(); document.getElementById('authForm').style.display='block'; document.getElementById('masterPanel').style.display='none'; document.getElementById('password').value=''; }
+// ===================
+// Logout
+// ===================
+async function logout(){
+  await supabase.auth.signOut();
+  user = null;
+  document.getElementById('authForm').style.display='block';
+  document.getElementById('masterPanel').style.display='none';
+  document.getElementById('password').value='';
+}
 
+// ===================
+// Load Marketplace
+// ===================
 async function loadAllMarketplace(){
   const { data: products, error } = await supabase.from('products').select('*, stores(*)').order('created_at',{ascending:false});
   if(error){ alert(error.message); return; }
@@ -115,9 +142,41 @@ async function loadAllMarketplace(){
   }).join('');
 }
 
-async function featureProduct(id,btn){ btn.disabled=true; try{ const { data: product } = await supabase.from('products').select('featured').eq('id',id).single(); await supabase.from('products').update({ featured: !product.featured }).eq('id', id); loadAllMarketplace(); } catch(e){ alert(e.message); } finally{ btn.disabled=false; } }
-async function removeProduct(id,btn){ if(!confirm('Remove this product?')) return; btn.disabled=true; try{ const { error } = await supabase.from('products').delete().eq('id',id); if(error) alert(error.message); loadAllMarketplace(); } finally{ btn.disabled=false; } }
-async function extendLicense(storeId,days){ if(!confirm(`Extend license by ${days} days?`)) return; try{ const { error } = await supabase.rpc('extend_license',{store_uuid:storeId,days}); if(error) alert(error.message); loadAllMarketplace(); } catch(e){ alert(e.message); } }
+// ===================
+// Feature / Remove / Extend with spinner
+// ===================
+async function featureProduct(id,btn){
+  const originalText = btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spinner-border spinner-border-sm" role="status"></span>`;
+  try{
+    const { data: product } = await supabase.from('products').select('featured').eq('id',id).single();
+    await supabase.from('products').update({ featured: !product.featured }).eq('id', id);
+    loadAllMarketplace();
+  } catch(e){ alert(e.message); } 
+  finally{ btn.disabled=false; btn.innerHTML=originalText; }
+}
+
+async function removeProduct(id,btn){
+  if(!confirm('Remove this product?')) return;
+  const originalText = btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spinner-border spinner-border-sm" role="status"></span>`;
+  try{
+    const { error } = await supabase.from('products').delete().eq('id',id);
+    if(error) alert(error.message);
+    loadAllMarketplace();
+  } finally{ btn.disabled=false; btn.innerHTML=originalText; }
+}
+
+async function extendLicense(storeId,days){
+  if(!confirm(`Extend license by ${days} days?`)) return;
+  try{
+    const { error } = await supabase.rpc('extend_license',{ store_uuid:storeId, days });
+    if(error) alert(error.message);
+    loadAllMarketplace();
+  } catch(e){ alert(e.message); }
+}
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
