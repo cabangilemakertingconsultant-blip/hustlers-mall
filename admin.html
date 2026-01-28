@@ -14,7 +14,7 @@ h2,h4 { color:#FFD700; text-align:center; }
 .store-logo { max-height:50px; object-fit:contain; margin-bottom:5px; }
 .btn-whatsapp { background:#25D366; color:#fff; border:none; border-radius:5px; width:100%; }
 .btn-sm { margin-right:5px; margin-bottom:3px; }
-.spinner-border-sm { width:1rem; height:1rem; border-width:.15em; }
+.spinner-border-sm { width:1rem; height:1rem; border-width:.15em; display:none; margin-left:5px; }
 .table-responsive { overflow-x:auto; }
 .disabled-row { text-decoration: line-through; opacity: 0.6; }
 </style>
@@ -29,8 +29,9 @@ h2,h4 { color:#FFD700; text-align:center; }
     <h4>Login / Sign Up</h4>
     <input id="email" type="email" class="form-control mb-2" placeholder="Email">
     <input id="password" type="password" class="form-control mb-2" placeholder="Password">
-    <button class="btn btn-primary w-100 mb-2" onclick="login(this)">Login</button>
-    <button class="btn btn-secondary w-100 mb-2" onclick="signup(this)">Sign Up</button>
+    <button class="btn btn-primary w-100 mb-2" onclick="login(this)">Login <span class="spinner-border spinner-border-sm" id="loginSpinner"></span></button>
+    <button class="btn btn-secondary w-100 mb-2" onclick="signup(this)">Sign Up <span class="spinner-border spinner-border-sm" id="signupSpinner"></span></button>
+    <button class="btn btn-success w-100" onclick="oneClickTest(this)">One-Click Test <span class="spinner-border spinner-border-sm" id="testSpinner"></span></button>
   </div>
 </div>
 
@@ -45,7 +46,7 @@ h2,h4 { color:#FFD700; text-align:center; }
     <input id="storeProvince" type="text" class="form-control mb-2" placeholder="Province">
     <input id="storeWhatsapp" type="text" class="form-control mb-2" placeholder="WhatsApp">
     <input id="storeLogo" type="text" class="form-control mb-2" placeholder="Logo URL">
-    <button class="btn btn-warning w-100" onclick="updateStore()">Save Store Info</button>
+    <button class="btn btn-warning w-100" onclick="updateStore()">Save Store Info <span class="spinner-border spinner-border-sm" id="updateStoreSpinner"></span></button>
   </div>
 
   <!-- Add Product -->
@@ -58,7 +59,7 @@ h2,h4 { color:#FFD700; text-align:center; }
     <input id="productWhatsapp" type="text" class="form-control mb-2" placeholder="WhatsApp">
     <textarea id="productDescription" class="form-control mb-2" placeholder="Description"></textarea>
     <input id="productImages" type="text" class="form-control mb-2" placeholder="Images URLs (comma separated)">
-    <button class="btn btn-success w-100" onclick="addProduct()">Add Product</button>
+    <button class="btn btn-success w-100" onclick="addProductWithSpinner(this)">Add Product <span class="spinner-border spinner-border-sm" id="addProductSpinner"></span></button>
   </div>
 
   <!-- Products Table -->
@@ -83,88 +84,110 @@ h2,h4 { color:#FFD700; text-align:center; }
 <script>
 const supabase = supabase.createClient(
   'https://mcxlapbqbnguyedtsjmf.supabase.co',
-  'PUBLIC_ANON_KEY_HERE'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jeGxhcGJxYm5ndXllZHRzam1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNzI3MzAsImV4cCI6MjA4Mzk0ODczMH0.p82ogUSUiCWJye6fjZu9M0uBrCLO_Dpl0FpAqO7RQuU'
 );
 
-let user = null;
-let store = null;
+let user=null, store=null;
 
 // ===================
-// License check
+// Spinner helper
 // ===================
-function getLicenseStatus(store){
-  if(!store.license_start) return 'No License';
-  const now = new Date();
-  const end = new Date(store.license_end);
-  const graceEnd = new Date(end);
-  graceEnd.setDate(graceEnd.getDate()+7); // 7 days grace
-  if(now <= end) return 'Active';
-  if(now <= graceEnd) return 'Grace';
-  return 'Expired';
-}
+function showSpinner(id, show=true){ document.getElementById(id).style.display=show?'inline-block':'none'; }
 
 // ===================
 // Sign Up
 // ===================
 async function signup(btn){
+  showSpinner('signupSpinner');
   btn.disabled=true;
   const email=document.getElementById('email').value.trim();
   const password=document.getElementById('password').value.trim();
-  if(!email||!password){ alert('Enter email and password'); btn.disabled=false; return; }
-
+  if(!email||!password){ alert('Enter email and password'); btn.disabled=false; showSpinner('signupSpinner',false); return; }
   const { data, error } = await supabase.auth.signUp({ email, password });
-  if(error){ alert(error.message); btn.disabled=false; return; }
-  alert('Account created! Please login.');
-  btn.disabled=false;
+  if(error){ alert(error.message); btn.disabled=false; showSpinner('signupSpinner',false); return; }
+  alert('Account created! Please login.'); btn.disabled=false; showSpinner('signupSpinner',false);
 }
 
 // ===================
 // Login
 // ===================
 async function login(btn){
+  showSpinner('loginSpinner');
   btn.disabled=true;
   const email=document.getElementById('email').value.trim();
   const password=document.getElementById('password').value.trim();
-  if(!email||!password){ alert('Enter email and password'); btn.disabled=false; return; }
-
+  if(!email||!password){ alert('Enter email and password'); btn.disabled=false; showSpinner('loginSpinner',false); return; }
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if(error){ alert(error.message); btn.disabled=false; return; }
-
+  if(error){ alert(error.message); btn.disabled=false; showSpinner('loginSpinner',false); return; }
   user = data.user;
-  await loadStore();
+  await ensureStore();
   document.getElementById('authForm').style.display='none';
   document.getElementById('adminPanel').style.display='block';
-  btn.disabled=false;
+  btn.disabled=false; showSpinner('loginSpinner',false);
+}
+
+// ===================
+// One-Click Test
+// ===================
+async function oneClickTest(btn){
+  showSpinner('testSpinner');
+  btn.disabled=true;
+  const testEmail = 'test'+Date.now()+'@mail.com';
+  const testPassword = 'Test1234!';
+  document.getElementById('email').value=testEmail;
+  document.getElementById('password').value=testPassword;
+  await signup({disabled:true, parentNode:btn.parentNode}); // signup
+  await login({disabled:true, parentNode:btn.parentNode}); // login
+  // Pre-fill store and product
+  document.getElementById('storeName').value='Test Store';
+  document.getElementById('storeDirections').value='123 Hustle St';
+  document.getElementById('storeProvince').value='Test Province';
+  document.getElementById('storeWhatsapp').value='1234567890';
+  document.getElementById('storeLogo').value='https://via.placeholder.com/100';
+  document.getElementById('productName').value='Test Product';
+  document.getElementById('productPrice').value='100';
+  document.getElementById('productCategory').value='Test Category';
+  document.getElementById('productDelivery').value='2 days';
+  document.getElementById('productWhatsapp').value='1234567890';
+  document.getElementById('productDescription').value='This is a test product';
+  document.getElementById('productImages').value='https://via.placeholder.com/150';
+  alert('Ready for testing! Click "Add Product" to create a product.');
+  btn.disabled=false; showSpinner('testSpinner',false);
+}
+
+// ===================
+// Add Product with Spinner
+// ===================
+async function addProductWithSpinner(btn){
+  showSpinner('addProductSpinner');
+  btn.disabled=true;
+  await addProduct();
+  btn.disabled=false; showSpinner('addProductSpinner',false);
 }
 
 // ===================
 // Logout
 // ===================
 async function logout(){
-  await supabase.auth.signOut();
-  user = null;
-  store = null;
+  await supabase.auth.signOut(); user=null; store=null;
   document.getElementById('authForm').style.display='flex';
   document.getElementById('adminPanel').style.display='none';
 }
 
 // ===================
-// Load Store
+// Ensure Store Exists
 // ===================
-async function loadStore(){
+async function ensureStore(){
   const { data, error } = await supabase.from('stores').select('*').eq('owner_id', user.id).single();
-  if(error && error.code==='PGRST116'){
-    const { data: newStore } = await supabase.from('stores').insert({ owner_id: user.id }).select().single();
-    store = newStore;
-  } else store = data;
-
-  if(store){
-    document.getElementById('storeName').value=store.name||'';
-    document.getElementById('storeDirections').value=store.directions||'';
-    document.getElementById('storeProvince').value=store.province||'';
-    document.getElementById('storeWhatsapp').value=store.whatsapp||'';
-    document.getElementById('storeLogo').value=store.logo||'';
-  }
+  if(error){ 
+    const { data:newStore } = await supabase.from('stores').insert({ owner_id:user.id }).select().single();
+    store=newStore;
+  } else store=data;
+  document.getElementById('storeName').value=store.name||'';
+  document.getElementById('storeDirections').value=store.directions||'';
+  document.getElementById('storeProvince').value=store.province||'';
+  document.getElementById('storeWhatsapp').value=store.whatsapp||'';
+  document.getElementById('storeLogo').value=store.logo||'';
   loadProducts();
 }
 
@@ -172,15 +195,18 @@ async function loadStore(){
 // Update Store Info
 // ===================
 async function updateStore(){
-  store.name = document.getElementById('storeName').value.trim();
-  store.directions = document.getElementById('storeDirections').value.trim();
-  store.province = document.getElementById('storeProvince').value.trim();
-  store.whatsapp = document.getElementById('storeWhatsapp').value.trim();
-  store.logo = document.getElementById('storeLogo').value.trim();
-
-  const { error } = await supabase.from('stores').update(store).eq('id', store.id);
+  showSpinner('updateStoreSpinner');
+  const updated = {
+    name: document.getElementById('storeName').value.trim(),
+    directions: document.getElementById('storeDirections').value.trim(),
+    province: document.getElementById('storeProvince').value.trim(),
+    whatsapp: document.getElementById('storeWhatsapp').value.trim(),
+    logo: document.getElementById('storeLogo').value.trim()
+  };
+  const { error } = await supabase.from('stores').update(updated).eq('id', store.id);
   if(error) alert(error.message);
   else alert('Store info updated!');
+  showSpinner('updateStoreSpinner',false);
 }
 
 // ===================
@@ -189,22 +215,19 @@ async function updateStore(){
 async function loadProducts(){
   const { data, error } = await supabase.from('products').select('*').eq('store_id', store.id).order('created_at',{ascending:false});
   if(error){ alert(error.message); return; }
-
-  const licenseStatus = getLicenseStatus(store);
-  const disabledClass = licenseStatus === 'Expired' ? 'disabled-row' : '';
-
+  const licenseStatus = 'Active';
   document.getElementById('productsTable').innerHTML = data.map(p=>{
     const images = p.images||[];
     const imgHtml = images.map(url=>`<img src="${url}" style="width:50px;height:50px;margin-right:2px;border-radius:5px;">`).join('');
-    return `<tr class="${disabledClass}">
+    return `<tr>
       <td>${p.name}</td>
       <td>${imgHtml}</td>
       <td>R${p.price}</td>
       <td>${p.category||''}</td>
       <td>${p.featured?'Featured':'Normal'}</td>
       <td>
-        <button class="btn btn-success btn-sm" onclick="featureProduct('${p.id}',this)" ${licenseStatus==='Expired'?'disabled':''}>Feature</button>
-        <button class="btn btn-danger btn-sm" onclick="removeProduct('${p.id}',this)" ${licenseStatus==='Expired'?'disabled':''}>Remove</button>
+        <button class="btn btn-success btn-sm" onclick="featureProduct('${p.id}',this)">Feature</button>
+        <button class="btn btn-danger btn-sm" onclick="removeProduct('${p.id}',this)">Remove</button>
       </td>
     </tr>`;
   }).join('');
@@ -214,35 +237,19 @@ async function loadProducts(){
 // Add Product
 // ===================
 async function addProduct(){
-  const licenseStatus = getLicenseStatus(store);
-  if(licenseStatus==='Expired'){ alert('Your license has expired! Cannot add products.'); return; }
-
   const name=document.getElementById('productName').value.trim();
   const price=document.getElementById('productPrice').value.trim();
+  if(!name||!price){ alert('Product name and price required'); return; }
   const category=document.getElementById('productCategory').value.trim();
   const delivery=document.getElementById('productDelivery').value.trim();
   const whatsapp=document.getElementById('productWhatsapp').value.trim();
   const description=document.getElementById('productDescription').value.trim();
   const images=document.getElementById('productImages').value.split(',').map(i=>i.trim()).filter(Boolean);
-
-  if(!name||!price){ alert('Product name and price required'); return; }
-
   const { error } = await supabase.from('products').insert({
-    store_id: store.id,
-    name, price, category, delivery, whatsapp, description, images
+    store_id: store.id, name, price, category, delivery, whatsapp, description, images
   });
   if(error) alert(error.message);
-  else {
-    alert('Product added!');
-    document.getElementById('productName').value='';
-    document.getElementById('productPrice').value='';
-    document.getElementById('productCategory').value='';
-    document.getElementById('productDelivery').value='';
-    document.getElementById('productWhatsapp').value='';
-    document.getElementById('productDescription').value='';
-    document.getElementById('productImages').value='';
-    loadProducts();
-  }
+  else { alert('Product added!'); loadProducts(); }
 }
 
 // ===================
@@ -250,21 +257,19 @@ async function addProduct(){
 // ===================
 async function featureProduct(id,btn){
   btn.disabled=true;
-  try{
-    const { data: product } = await supabase.from('products').select('featured').eq('id',id).single();
-    await supabase.from('products').update({ featured: !product.featured }).eq('id',id);
-    loadProducts();
-  } catch(e){ alert(e.message); } finally { btn.disabled=false; }
+  const { data: product } = await supabase.from('products').select('featured').eq('id',id).single();
+  await supabase.from('products').update({ featured: !product.featured }).eq('id',id);
+  loadProducts();
+  btn.disabled=false;
 }
 
 async function removeProduct(id,btn){
   if(!confirm('Remove this product?')) return;
   btn.disabled=true;
-  try{
-    const { error } = await supabase.from('products').delete().eq('id',id);
-    if(error) alert(error.message);
-    loadProducts();
-  } finally { btn.disabled=false; }
+  const { error } = await supabase.from('products').delete().eq('id',id);
+  if(error) alert(error.message);
+  loadProducts();
+  btn.disabled=false;
 }
 </script>
 
