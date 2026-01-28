@@ -16,6 +16,7 @@ h2,h4 { color:#FFD700; text-align:center; }
 .btn-sm { margin-right:5px; margin-bottom:3px; }
 .spinner-border-sm { width:1rem; height:1rem; border-width:.15em; }
 .table-responsive { overflow-x:auto; }
+.disabled-row { text-decoration: line-through; opacity: 0.6; }
 </style>
 </head>
 <body>
@@ -82,11 +83,25 @@ h2,h4 { color:#FFD700; text-align:center; }
 <script>
 const supabase = supabase.createClient(
   'https://mcxlapbqbnguyedtsjmf.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jeGxhcGJxYm5ndXllZHRzam1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNzI3MzAsImV4cCI6MjA4Mzk0ODczMH0.p82ogUSUiCWJye6fjZu9M0uBrCLO_Dpl0FpAqO7RQuU'
+  'PUBLIC_ANON_KEY_HERE'
 );
 
 let user = null;
 let store = null;
+
+// ===================
+// License check
+// ===================
+function getLicenseStatus(store){
+  if(!store.license_start) return 'No License';
+  const now = new Date();
+  const end = new Date(store.license_end);
+  const graceEnd = new Date(end);
+  graceEnd.setDate(graceEnd.getDate()+7); // 7 days grace
+  if(now <= end) return 'Active';
+  if(now <= graceEnd) return 'Grace';
+  return 'Expired';
+}
 
 // ===================
 // Sign Up
@@ -138,7 +153,7 @@ async function logout(){
 // ===================
 async function loadStore(){
   const { data, error } = await supabase.from('stores').select('*').eq('owner_id', user.id).single();
-  if(error && error.code==='PGRST116'){ // no store yet
+  if(error && error.code==='PGRST116'){
     const { data: newStore } = await supabase.from('stores').insert({ owner_id: user.id }).select().single();
     store = newStore;
   } else store = data;
@@ -175,18 +190,21 @@ async function loadProducts(){
   const { data, error } = await supabase.from('products').select('*').eq('store_id', store.id).order('created_at',{ascending:false});
   if(error){ alert(error.message); return; }
 
+  const licenseStatus = getLicenseStatus(store);
+  const disabledClass = licenseStatus === 'Expired' ? 'disabled-row' : '';
+
   document.getElementById('productsTable').innerHTML = data.map(p=>{
     const images = p.images||[];
     const imgHtml = images.map(url=>`<img src="${url}" style="width:50px;height:50px;margin-right:2px;border-radius:5px;">`).join('');
-    return `<tr>
+    return `<tr class="${disabledClass}">
       <td>${p.name}</td>
       <td>${imgHtml}</td>
       <td>R${p.price}</td>
       <td>${p.category||''}</td>
       <td>${p.featured?'Featured':'Normal'}</td>
       <td>
-        <button class="btn btn-success btn-sm" onclick="featureProduct('${p.id}',this)">Feature</button>
-        <button class="btn btn-danger btn-sm" onclick="removeProduct('${p.id}',this)">Remove</button>
+        <button class="btn btn-success btn-sm" onclick="featureProduct('${p.id}',this)" ${licenseStatus==='Expired'?'disabled':''}>Feature</button>
+        <button class="btn btn-danger btn-sm" onclick="removeProduct('${p.id}',this)" ${licenseStatus==='Expired'?'disabled':''}>Remove</button>
       </td>
     </tr>`;
   }).join('');
@@ -196,6 +214,9 @@ async function loadProducts(){
 // Add Product
 // ===================
 async function addProduct(){
+  const licenseStatus = getLicenseStatus(store);
+  if(licenseStatus==='Expired'){ alert('Your license has expired! Cannot add products.'); return; }
+
   const name=document.getElementById('productName').value.trim();
   const price=document.getElementById('productPrice').value.trim();
   const category=document.getElementById('productCategory').value.trim();
@@ -246,6 +267,7 @@ async function removeProduct(id,btn){
   } finally { btn.disabled=false; }
 }
 </script>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
