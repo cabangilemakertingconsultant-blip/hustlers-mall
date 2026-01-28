@@ -10,9 +10,12 @@
 body { background:#111; color:#fff; font-family:'Segoe UI',sans-serif; padding:15px; }
 h2,h3 { color:#FFD700; text-align:center; margin-bottom:15px; }
 .store-logo { max-height:100px; display:block; margin:0 auto 10px; }
-.card { border-radius:10px; background:#1c1c1c; border:1px solid #FFD700; margin-bottom:20px; }
+.card { border-radius:10px; background:#1c1c1c; border:1px solid #FFD700; margin-bottom:20px; transition:transform .2s; }
+.card:hover { transform:scale(1.02); }
 .product-img { width:100%; height:200px; object-fit:cover; border-radius:5px; }
-.btn-whatsapp { background:#25D366; color:#fff; border:none; border-radius:5px; width:100%; }
+.btn-whatsapp, .btn-admin { border:none; border-radius:5px; width:100%; margin-top:5px; }
+.btn-whatsapp { background:#25D366; color:#fff; }
+.btn-admin { background:#FFD700; color:#111; font-weight:bold; }
 .badge-featured { background:#FFD700; color:#111; font-weight:bold; padding:3px 6px; position:absolute; top:10px; left:10px; border-radius:5px; }
 .filter-container { display:flex; justify-content:center; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
 .select-category, #productSearchInput, #storeSearchInput { padding:5px 10px; border-radius:5px; border:none; }
@@ -24,6 +27,11 @@ input { border-radius:6px; border:none; padding:8px 12px; width:100%; }
 </style>
 </head>
 <body>
+
+<!-- ADMIN BUTTON -->
+<div class="d-flex justify-content-center mb-3">
+  <a href="admin.html" class="btn btn-admin w-50">Go to Admin Panel</a>
+</div>
 
 <!-- MARKETPLACE VIEW -->
 <div id="marketplaceView">
@@ -73,14 +81,16 @@ const supabase = supabase.createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jeGxhcGJxYm5ndXllZHRzam1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNzI3MzAsImV4cCI6MjA4Mzk0ODczMH0.p82ogUSUiCWJye6fjZu9M0uBrCLO_Dpl0FpAqO7RQuU'
 );
 
-const params = new URLSearchParams(window.location.search);
-const storeId = params.get('id');
-
 let allStores = [];
 let allProducts = [];
 let storeData = null;
 
-// LICENSE FUNCTIONS
+function getHashStoreId(){
+  const hash = window.location.hash;
+  if(hash.startsWith('#store=')) return hash.replace('#store=','');
+  return null;
+}
+
 function getLicenseStatus(store){
   if(!store.license_start) return 'Trial';
   const now = new Date();
@@ -101,7 +111,6 @@ async function loadFeaturedProducts(){
     .select('*, stores(*)')
     .eq('featured', true)
     .order('created_at', { ascending: false });
-
   if(error){ console.log('Failed to load featured products'); return; }
 
   const featured = (data || []).filter(p => {
@@ -122,7 +131,7 @@ async function loadFeaturedProducts(){
         <img src="${img}" class="product-img mb-2">
         <h6>${p.name}</h6>
         <p>R${p.price}</p>
-        <a href="?id=${p.store_id}" class="btn btn-open btn-sm">Visit Store</a>
+        <a href="#store=${p.store_id}" class="btn btn-open btn-sm">Visit Store</a>
       </div>
     </div>`;
   }).join('');
@@ -150,7 +159,7 @@ function renderStores(){
         <h5 class="text-center">${store.name}</h5>
         <p class="text-center">${store.province||''}</p>
         <span class="store-status">${getLicenseStatus(store)}</span>
-        <a href="?id=${store.id}" class="btn btn-open mt-2">Visit Store</a>
+        <a href="#store=${store.id}" class="btn btn-open mt-2">Visit Store</a>
       </div>
     </div>`;
   }).join('');
@@ -159,9 +168,9 @@ function renderStores(){
 document.getElementById('storeSearchInput').addEventListener('input', renderStores);
 
 // STORE VIEW FUNCTIONS
-async function loadStore(){
+async function loadStore(storeId){
   const { data: store, error } = await supabase.from('stores').select('*').eq('id',storeId).single();
-  if(error || !store){ alert('Store unavailable'); window.location='?'; return; }
+  if(error || !store){ alert('Store unavailable'); backToMarketplace(); return; }
   storeData = store;
 
   document.getElementById('marketplaceView').style.display='none';
@@ -172,10 +181,10 @@ async function loadStore(){
   document.getElementById('storeDirections').textContent = store.directions||'';
   document.getElementById('storeWhatsapp').href = `https://wa.me/${store.whatsapp}?text=Hello, I found your store on Hustling Mall`;
 
-  loadProducts();
+  loadProducts(storeId);
 }
 
-async function loadProducts(){
+async function loadProducts(storeId){
   const { data, error } = await supabase.from('products').select('*').eq('store_id',storeId).order('featured',{ascending:false});
   if(error){ alert('Failed to load products'); return; }
   allProducts = data || [];
@@ -221,10 +230,24 @@ function renderProducts(){
 document.getElementById('productSearchInput').addEventListener('input', renderProducts);
 document.getElementById('categorySelect').addEventListener('change', renderProducts);
 
-function backToMarketplace(){ window.location='?'; }
+function backToMarketplace(){
+  window.location.hash = '';
+  document.getElementById('storeView').style.display='none';
+  document.getElementById('marketplaceView').style.display='block';
+  renderStores();
+}
+
+// HASH CHANGE LISTENER
+window.addEventListener('hashchange', ()=>{
+  const hashStoreId = getHashStoreId();
+  if(hashStoreId){ loadStore(hashStoreId); }
+  else { backToMarketplace(); }
+});
 
 // INITIAL LOAD
-if(storeId){ loadStore(); } else { loadFeaturedProducts(); loadStores(); }
+const initialStoreId = getHashStoreId();
+if(initialStoreId){ loadStore(initialStoreId); } 
+else { loadFeaturedProducts(); loadStores(); }
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
